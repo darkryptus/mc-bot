@@ -1,6 +1,6 @@
 const express = require('express')
 const mineflayer = require('mineflayer')
-const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
+const { pathfinder } = require('mineflayer-pathfinder')
 
 const app = express()
 const PORT = 3000
@@ -26,23 +26,26 @@ function createBot () {
   })
 
   bot.on('spawn', () => {
-    console.log('[BOT] Spawned in the world')
-    // ❌ removed auto "yo"
+    console.log('[BOT] Spawned')
+
+    // 🔒 HARD LOCK: bot can NEVER dig
+    bot.canDig = false
   })
 
   /* ---------- CHAT COMMANDS ---------- */
 
   bot.on('chat', async (username, message) => {
     if (username === bot.username) return
+    message = message.toLowerCase()
 
     // respond to "yo"
-    if (message.toLowerCase() === 'yo') {
+    if (message === 'yo') {
       bot.chat('yo')
       return
     }
 
-    // sleep command
-    if (message.toLowerCase() === 'alex sleep') {
+    // alex sleep command
+    if (message === 'alex sleep') {
       try {
         const bed = bot.findBlock({
           matching: block => bot.isABed(block),
@@ -50,26 +53,32 @@ function createBot () {
         })
 
         if (!bed) {
-          bot.chat("I can't find a bed nearby.")
+          bot.chat('No bed nearby.')
           return
         }
 
-        const mcData = require('minecraft-data')(bot.version)
-        const movements = new Movements(bot, mcData)
-        bot.pathfinder.setMovements(movements)
+        // 🛑 FULL STOP — NO MOVEMENT, NO ATTACK
+        bot.pathfinder.setGoal(null)
+        bot.clearControlStates()
+        bot.setControlState('attack', false)
+        bot.setControlState('forward', false)
+        bot.setControlState('back', false)
+        bot.setControlState('left', false)
+        bot.setControlState('right', false)
 
-        bot.chat('Going to bed...')
+        // 👀 LOOK AT BED
+        await bot.lookAt(bed.position.offset(0.5, 0.5, 0.5), true)
 
-        await bot.pathfinder.goto(
-          new goals.GoalBlock(bed.position.x, bed.position.y, bed.position.z)
-        )
+        // ⏳ REQUIRED DELAY (1.8.9 FIX)
+        await bot.waitForTicks(20)
 
-        //await bot.sleep(bed)
-        bot.activateBlock(bed)
-        bot.chat('Respawn point set 👍')
+        // ✅ RIGHT CLICK ONLY — NO BREAKING
+        await bot.sleep(bed)
+
+        bot.chat('Sleeping. Respawn set.')
 
       } catch (err) {
-        bot.chat("Can't sleep right now.")
+        bot.chat("Can't sleep now.")
         console.log('[BOT] Sleep error:', err.message)
       }
     }
@@ -79,8 +88,8 @@ function createBot () {
     console.log('[BOT] Kicked:', reason)
   })
 
-  bot.on('end', reason => {
-    console.log('[BOT] Disconnected:', reason)
+  bot.on('end', () => {
+    console.log('[BOT] Disconnected')
     bot = null
 
     setTimeout(() => {
@@ -90,7 +99,7 @@ function createBot () {
   })
 
   bot.on('error', err => {
-    console.error('[BOT] Error:', err)
+    console.log('[BOT] Error:', err.message)
   })
 }
 
@@ -106,6 +115,6 @@ app.listen(PORT, () => {
   console.log(`[WEB] Server running on http://localhost:${PORT}`)
 })
 
-/* ---------- AUTO START BOT ---------- */
+/* ---------- START BOT ---------- */
 
 createBot()
