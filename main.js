@@ -64,7 +64,8 @@ function createBot () {
           new goals.GoalBlock(bed.position.x, bed.position.y, bed.position.z)
         )
 
-        await bot.sleep(bed)
+        //await bot.sleep(bed)
+        bot.activateBlock(bed)
         bot.chat('Respawn point set 👍')
 
       } catch (err) {
