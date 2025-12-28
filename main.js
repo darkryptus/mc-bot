@@ -1,5 +1,6 @@
 const express = require('express')
 const mineflayer = require('mineflayer')
+const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
 
 const app = express()
 const PORT = 3000
@@ -18,17 +19,59 @@ function createBot () {
     keepAlive: true
   })
 
+  bot.loadPlugin(pathfinder)
+
   bot.on('login', () => {
     console.log('[BOT] Logged in')
   })
 
   bot.on('spawn', () => {
     console.log('[BOT] Spawned in the world')
+    // ❌ removed auto "yo"
+  })
 
-    // delayed chat to avoid antibot
-    setTimeout(() => {
+  /* ---------- CHAT COMMANDS ---------- */
+
+  bot.on('chat', async (username, message) => {
+    if (username === bot.username) return
+
+    // respond to "yo"
+    if (message.toLowerCase() === 'yo') {
       bot.chat('yo')
-    }, 3000)
+      return
+    }
+
+    // sleep command
+    if (message.toLowerCase() === 'alex sleep') {
+      try {
+        const bed = bot.findBlock({
+          matching: block => bot.isABed(block),
+          maxDistance: 32
+        })
+
+        if (!bed) {
+          bot.chat("I can't find a bed nearby.")
+          return
+        }
+
+        const mcData = require('minecraft-data')(bot.version)
+        const movements = new Movements(bot, mcData)
+        bot.pathfinder.setMovements(movements)
+
+        bot.chat('Going to bed...')
+
+        await bot.pathfinder.goto(
+          new goals.GoalBlock(bed.position.x, bed.position.y, bed.position.z)
+        )
+
+        await bot.sleep(bed)
+        bot.chat('Respawn point set 👍')
+
+      } catch (err) {
+        bot.chat("Can't sleep right now.")
+        console.log('[BOT] Sleep error:', err.message)
+      }
+    }
   })
 
   bot.on('kicked', reason => {
@@ -39,7 +82,6 @@ function createBot () {
     console.log('[BOT] Disconnected:', reason)
     bot = null
 
-    // optional auto-reconnect
     setTimeout(() => {
       console.log('[BOT] Reconnecting...')
       createBot()
