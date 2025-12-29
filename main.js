@@ -6,6 +6,10 @@ const app = express()
 const PORT = 3000
 
 let bot = null
+let isBusy = false
+let antiAfkTimeout = null
+
+/* ---------- BOT ---------- */
 
 function createBot () {
   console.log('[BOT] Initializing...')
@@ -13,7 +17,7 @@ function createBot () {
   bot = mineflayer.createBot({
     host: 'play.darkryptus.us.to',
     port: 12949,
-    username: 'AlexWalker',
+    username: 'Alex_Walker',
     version: '1.8.9',
     auth: 'offline',
     keepAlive: true
@@ -21,31 +25,24 @@ function createBot () {
 
   bot.loadPlugin(pathfinder)
 
-  bot.on('login', () => {
-    console.log('[BOT] Logged in')
-  })
-
   bot.on('spawn', () => {
     console.log('[BOT] Spawned')
-
-    // 🔒 HARD LOCK: bot can NEVER dig
-    bot.canDig = false
+    startSmartAntiAfk()
   })
-
-  /* ---------- CHAT COMMANDS ---------- */
 
   bot.on('chat', async (username, message) => {
     if (username === bot.username) return
     message = message.toLowerCase()
 
-    // respond to "yo"
     if (message === 'yo') {
       bot.chat('yo')
       return
     }
 
-    // alex sleep command
     if (message === 'alex sleep') {
+      isBusy = true
+      stopAntiAfk()
+
       try {
         const bed = bot.findBlock({
           matching: block => bot.isABed(block),
@@ -54,67 +51,133 @@ function createBot () {
 
         if (!bed) {
           bot.chat('No bed nearby.')
+          isBusy = false
+          startSmartAntiAfk()
           return
         }
 
-        // 🛑 FULL STOP — NO MOVEMENT, NO ATTACK
-        bot.pathfinder.setGoal(null)
         bot.clearControlStates()
-        bot.setControlState('attack', false)
-        bot.setControlState('forward', false)
-        bot.setControlState('back', false)
-        bot.setControlState('left', false)
-        bot.setControlState('right', false)
-
-        // 👀 LOOK AT BED
         await bot.lookAt(bed.position.offset(0.5, 0.5, 0.5), true)
-
-        // ⏳ REQUIRED DELAY (1.8.9 FIX)
         await bot.waitForTicks(20)
-
-        // ✅ RIGHT CLICK ONLY — NO BREAKING
         await bot.sleep(bed)
 
-        bot.chat('Sleeping. Respawn set.')
-
-      } catch (err) {
-        bot.chat("Can't sleep now.")
-        console.log('[BOT] Sleep error:', err.message)
+        bot.chat('Sleeping.')
+      } catch (e) {
+        bot.chat("Can't sleep.")
       }
-    }
-  })
 
-  bot.on('kicked', reason => {
-    console.log('[BOT] Kicked:', reason)
+      isBusy = false
+      startSmartAntiAfk()
+    }
   })
 
   bot.on('end', () => {
     console.log('[BOT] Disconnected')
+    stopAntiAfk()
     bot = null
-
-    setTimeout(() => {
-      console.log('[BOT] Reconnecting...')
-      createBot()
-    }, 5000)
+    setTimeout(createBot, 5000)
   })
 
-  bot.on('error', err => {
-    console.log('[BOT] Error:', err.message)
-  })
+  bot.on('error', err => console.log('[BOT] Error:', err.message))
+}
+
+/* ---------- SMART ANTI-AFK ---------- */
+
+function rand (min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min
+}
+
+function stopAntiAfk () {
+  if (antiAfkTimeout) clearTimeout(antiAfkTimeout)
+}
+
+function startSmartAntiAfk () {
+  stopAntiAfk()
+
+  const run = async () => {
+    if (!bot || !bot.entity || isBusy) return scheduleNext()
+
+    bot.clearControlStates()
+
+    // 🔍 Check nearby players
+    const nearby = Object.values(bot.entities)
+      .find(e => e.type === 'player' && e.username !== bot.username && e.position.distanceTo(bot.entity.position) < 5)
+
+    if (nearby) {
+      await bot.lookAt(nearby.position.offset(0, 1.6, 0), true)
+      bot.setControlState('sneak', true)
+      setTimeout(() => bot.setControlState('sneak', false), 800)
+      return scheduleNext()
+    }
+
+    const state = rand(1, 8)
+
+    switch (state) {
+      case 1: // idle
+        break
+
+      case 2: // micro walk
+        bot.setControlState('forward', true)
+        setTimeout(() => bot.clearControlStates(), rand(300, 900))
+        break
+
+      case 3: // circle
+        bot.setControlState('forward', true)
+        bot.setControlState(Math.random() > 0.5 ? 'left' : 'right', true)
+        setTimeout(() => bot.clearControlStates(), rand(1000, 2000))
+        break
+
+      case 4: // look around
+        bot.look(Math.random() * Math.PI * 2, rand(-0.3, 0.3))
+        break
+
+      case 5: // sneak tap
+        bot.setControlState('sneak', true)
+        setTimeout(() => bot.setControlState('sneak', false), rand(300, 1000))
+        break
+
+      case 6: // inventory interaction
+        try {
+          bot.setQuickBarSlot(rand(0, 8))
+          await bot.waitForTicks(10)
+        } catch {}
+        break
+
+      case 7: // jump
+        bot.setControlState('jump', true)
+        setTimeout(() => bot.setControlState('jump', false), 300)
+        break
+
+      case 8: // break block below (rare)
+        try {
+          const block = bot.blockAt(bot.entity.position.offset(0, -1, 0))
+          if (block && bot.canDigBlock(block)) {
+            await bot.dig(block)
+          }
+        } catch {}
+        break
+    }
+
+    scheduleNext()
+  }
+
+  const scheduleNext = () => {
+    antiAfkTimeout = setTimeout(run, rand(3000, 12000))
+  }
+
+  scheduleNext()
 }
 
 /* ---------- EXPRESS ---------- */
 
 app.get('/', (req, res) => {
-  res.json({
-    status: bot ? 'ONLINE' : 'OFFLINE'
-  })
+  res.json({ status: bot ? 'ONLINE' : 'OFFLINE' })
 })
 
 app.listen(PORT, () => {
-  console.log(`[WEB] Server running on http://localhost:${PORT}`)
+  console.log(`[WEB] Running on http://localhost:${PORT}`)
 })
 
-/* ---------- START BOT ---------- */
+/* ---------- START ---------- */
 
 createBot()
