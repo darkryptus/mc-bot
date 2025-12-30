@@ -16,7 +16,7 @@ function createBot () {
   bot = mineflayer.createBot({
     host: 'play.darkryptus.us.to',
     port: 12949,
-    username: 'alex69',
+    username: 'alex70',
     version: '1.8.9',
     auth: 'offline',
     keepAlive: true
