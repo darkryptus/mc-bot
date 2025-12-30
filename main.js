@@ -9,12 +9,13 @@ let bot = null
 let isBusy = false
 let reconnecting = false
 let movementInterval = null
+let headInterval = null
 
 /* ---------- USERNAME ROTATION ---------- */
 
 let nameIndex = 0
 const MAX_INDEX = 100
-const ROTATION_INTERVAL = 3 * 60 * 60 * 1000 // 3 hours
+const ROTATION_INTERVAL = 3 * 60 * 60 * 1000
 
 function getUsername () {
   return `alex${nameIndex}`
@@ -49,9 +50,8 @@ function createBot () {
   bot.on('spawn', () => {
     console.log('[BOT] Spawned')
     startRandomMovement()
+    startHeadMovement()
   })
-
-  /* ---------- CHAT COMMANDS ---------- */
 
   bot.on('chat', async (username, message) => {
     if (username === bot.username) return
@@ -61,37 +61,7 @@ function createBot () {
       bot.chat('yo')
       return
     }
-
-    if (message === 'alex sleep') {
-      isBusy = true
-      try {
-        const bed = bot.findBlock({
-          matching: block => bot.isABed(block),
-          maxDistance: 32
-        })
-
-        if (!bed) {
-          bot.chat('No bed nearby.')
-          isBusy = false
-          return
-        }
-
-        bot.pathfinder.setGoal(null)
-        bot.clearControlStates()
-
-        await bot.lookAt(bed.position.offset(0.5, 0.5, 0.5), true)
-        await bot.waitForTicks(20)
-        await bot.sleep(bed)
-
-        bot.chat('Sleeping. Respawn set.')
-      } catch (err) {
-        bot.chat("Can't sleep now.")
-      }
-      isBusy = false
-    }
   })
-
-  /* ---------- INSTANT RECONNECT ---------- */
 
   bot.on('end', () => {
     console.log('[BOT] Disconnected')
@@ -99,6 +69,11 @@ function createBot () {
     if (movementInterval) {
       clearInterval(movementInterval)
       movementInterval = null
+    }
+
+    if (headInterval) {
+      clearInterval(headInterval)
+      headInterval = null
     }
 
     if (reconnecting) return
@@ -126,63 +101,102 @@ function randomInt (min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
+function doJump () {
+  bot.setControlState('jump', true)
+  setTimeout(() => bot.setControlState('jump', false), 350)
+
+  // 30% chance to double-jump
+  if (Math.random() < 0.3) {
+    setTimeout(() => {
+      bot.setControlState('jump', true)
+      setTimeout(() => bot.setControlState('jump', false), 300)
+    }, 450)
+  }
+}
+
 function startRandomMovement () {
   if (movementInterval) clearInterval(movementInterval)
 
   movementInterval = setInterval(async () => {
     if (!bot || !bot.entity || isBusy) return
 
-    const action = randomInt(1, 8)
+    const roll = Math.random()
+
+    // 🔼 EXTRA frequent jumps (independent of actions)
+    if (roll < 0.35) {
+      doJump()
+      return
+    }
+
+    const action = randomInt(1, 6)
     bot.clearControlStates()
 
     switch (action) {
       case 1:
         bot.setControlState('forward', true)
-        setTimeout(() => bot.clearControlStates(), 2000)
+        setTimeout(() => bot.clearControlStates(), 1800)
         break
 
       case 2:
         bot.setControlState('forward', true)
         bot.setControlState(Math.random() > 0.5 ? 'left' : 'right', true)
-        setTimeout(() => bot.clearControlStates(), 2500)
+        setTimeout(() => bot.clearControlStates(), 2200)
         break
 
       case 3:
-        bot.setControlState('jump', true)
-        setTimeout(() => bot.setControlState('jump', false), 400)
+        bot.setControlState('sneak', true)
+        setTimeout(() => bot.setControlState('sneak', false), 1600)
         break
 
       case 4:
-        bot.setControlState('sneak', true)
-        setTimeout(() => bot.setControlState('sneak', false), 2000)
         break
 
       case 5:
-        bot.look(Math.random() * Math.PI * 2, 0)
         break
 
       case 6:
-        try {
-          const block = bot.blockAt(bot.entity.position.offset(0, -1, 0))
-          if (block && bot.canDigBlock(block)) await bot.dig(block)
-        } catch {}
-        break
-
-      case 7:
-        try {
-          const item = bot.inventory.items()[0]
-          if (!item) return
-          const refBlock = bot.blockAt(bot.entity.position.offset(0, -1, 0))
-          if (!refBlock) return
-          await bot.equip(item, 'hand')
-          await bot.placeBlock(refBlock, { x: 0, y: 1, z: 0 })
-        } catch {}
-        break
-
-      case 8:
         break
     }
-  }, 4000)
+  }, 3000) // faster decision loop
+}
+
+/* ---------- SMOOTH HEAD ROTATION ---------- */
+
+let targetYaw = 0
+let targetPitch = 0
+
+function startHeadMovement () {
+  if (headInterval) clearInterval(headInterval)
+
+  targetYaw = bot.entity.yaw
+  targetPitch = bot.entity.pitch
+
+  headInterval = setInterval(() => {
+    if (!bot || !bot.entity) return
+
+    if (Math.random() < 0.2) {
+      targetYaw = Math.random() * Math.PI * 2
+      targetPitch = (Math.random() * 0.6) - 0.3
+    }
+
+    const yaw = bot.entity.yaw
+    const pitch = bot.entity.pitch
+
+    const yawDiff = normalizeAngle(targetYaw - yaw)
+    const pitchDiff = targetPitch - pitch
+
+    bot.look(
+      yaw + yawDiff * 0.18,
+      pitch + pitchDiff * 0.18,
+      true
+    )
+  }, 250)
+}
+
+function normalizeAngle (angle) {
+  while (angle > Math.PI) angle -= Math.PI * 2
+  while (angle < -Math.PI) angle += Math.PI * 2
+  return angle
 }
 
 /* ---------- USERNAME ROTATION ---------- */
