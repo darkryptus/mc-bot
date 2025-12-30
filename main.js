@@ -53,16 +53,6 @@ function createBot () {
     startHeadMovement()
   })
 
-  bot.on('chat', async (username, message) => {
-    if (username === bot.username) return
-    message = message.toLowerCase()
-
-    if (message === 'yo') {
-      bot.chat('yo')
-      return
-    }
-  })
-
   bot.on('end', () => {
     console.log('[BOT] Disconnected')
 
@@ -86,16 +76,11 @@ function createBot () {
     })
   })
 
-  bot.on('kicked', reason => {
-    console.log('[BOT] Kicked:', reason)
-  })
-
-  bot.on('error', err => {
-    console.log('[BOT] Error:', err.message)
-  })
+  bot.on('kicked', r => console.log('[BOT] Kicked:', r))
+  bot.on('error', e => console.log('[BOT] Error:', e.message))
 }
 
-/* ---------- RANDOM MOVEMENT ---------- */
+/* ---------- MOVEMENT ---------- */
 
 function randomInt (min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min
@@ -103,64 +88,58 @@ function randomInt (min, max) {
 
 function doJump () {
   bot.setControlState('jump', true)
-  setTimeout(() => bot.setControlState('jump', false), 350)
+  setTimeout(() => bot.setControlState('jump', false), 300)
 
-  // 30% chance to double-jump
   if (Math.random() < 0.3) {
     setTimeout(() => {
       bot.setControlState('jump', true)
-      setTimeout(() => bot.setControlState('jump', false), 300)
-    }, 450)
+      setTimeout(() => bot.setControlState('jump', false), 250)
+    }, 400)
   }
 }
 
 function startRandomMovement () {
   if (movementInterval) clearInterval(movementInterval)
 
-  movementInterval = setInterval(async () => {
+  movementInterval = setInterval(() => {
     if (!bot || !bot.entity || isBusy) return
 
-    const roll = Math.random()
-
-    // 🔼 EXTRA frequent jumps (independent of actions)
-    if (roll < 0.35) {
-      doJump()
-      return
-    }
-
-    const action = randomInt(1, 6)
     bot.clearControlStates()
 
+    // frequent jumps
+    if (Math.random() < 0.3) {
+      doJump()
+    }
+
+    const action = randomInt(1, 5)
+
     switch (action) {
-      case 1:
+      case 1: // walk forward
         bot.setControlState('forward', true)
-        setTimeout(() => bot.clearControlStates(), 1800)
+        setTimeout(() => bot.clearControlStates(), randomInt(800, 1400))
         break
 
-      case 2:
+      case 2: // strafe + walk
         bot.setControlState('forward', true)
         bot.setControlState(Math.random() > 0.5 ? 'left' : 'right', true)
-        setTimeout(() => bot.clearControlStates(), 2200)
+        setTimeout(() => bot.clearControlStates(), randomInt(900, 1500))
         break
 
-      case 3:
+      case 3: // short sneak
         bot.setControlState('sneak', true)
-        setTimeout(() => bot.setControlState('sneak', false), 1600)
+        setTimeout(() => bot.setControlState('sneak', false), randomInt(600, 1200))
         break
 
-      case 4:
+      case 4: // idle micro-pause
         break
 
-      case 5:
-        break
-
-      case 6:
+      case 5: // rotate-only (movement handled by head loop)
         break
     }
-  }, 3000) // faster decision loop
+  }, 1500) // 🔥 MUCH MORE FREQUENT
 }
 
-/* ---------- SMOOTH HEAD ROTATION ---------- */
+/* ---------- HEAD ROTATION ---------- */
 
 let targetYaw = 0
 let targetPitch = 0
@@ -174,7 +153,7 @@ function startHeadMovement () {
   headInterval = setInterval(() => {
     if (!bot || !bot.entity) return
 
-    if (Math.random() < 0.2) {
+    if (Math.random() < 0.25) {
       targetYaw = Math.random() * Math.PI * 2
       targetPitch = (Math.random() * 0.6) - 0.3
     }
@@ -186,24 +165,22 @@ function startHeadMovement () {
     const pitchDiff = targetPitch - pitch
 
     bot.look(
-      yaw + yawDiff * 0.18,
-      pitch + pitchDiff * 0.18,
+      yaw + yawDiff * 0.2,
+      pitch + pitchDiff * 0.2,
       true
     )
   }, 250)
 }
 
-function normalizeAngle (angle) {
-  while (angle > Math.PI) angle -= Math.PI * 2
-  while (angle < -Math.PI) angle += Math.PI * 2
-  return angle
+function normalizeAngle (a) {
+  while (a > Math.PI) a -= Math.PI * 2
+  while (a < -Math.PI) a += Math.PI * 2
+  return a
 }
 
 /* ---------- USERNAME ROTATION ---------- */
 
 setInterval(() => {
-  console.log('[BOT] Rotating username...')
-
   reconnecting = true
   if (bot) bot.quit()
 
