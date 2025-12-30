@@ -8,6 +8,7 @@ const PORT = 3000
 let bot = null
 let isBusy = false
 let reconnecting = false
+let movementInterval = null
 
 /* ---------- USERNAME ROTATION ---------- */
 
@@ -85,7 +86,6 @@ function createBot () {
         bot.chat('Sleeping. Respawn set.')
       } catch (err) {
         bot.chat("Can't sleep now.")
-        console.log('[BOT] Sleep error:', err.message)
       }
       isBusy = false
     }
@@ -95,6 +95,11 @@ function createBot () {
 
   bot.on('end', () => {
     console.log('[BOT] Disconnected')
+
+    if (movementInterval) {
+      clearInterval(movementInterval)
+      movementInterval = null
+    }
 
     if (reconnecting) return
     reconnecting = true
@@ -122,7 +127,9 @@ function randomInt (min, max) {
 }
 
 function startRandomMovement () {
-  setInterval(async () => {
+  if (movementInterval) clearInterval(movementInterval)
+
+  movementInterval = setInterval(async () => {
     if (!bot || !bot.entity || isBusy) return
 
     const action = randomInt(1, 8)
@@ -133,28 +140,34 @@ function startRandomMovement () {
         bot.setControlState('forward', true)
         setTimeout(() => bot.clearControlStates(), 2000)
         break
+
       case 2:
         bot.setControlState('forward', true)
         bot.setControlState(Math.random() > 0.5 ? 'left' : 'right', true)
         setTimeout(() => bot.clearControlStates(), 2500)
         break
+
       case 3:
         bot.setControlState('jump', true)
         setTimeout(() => bot.setControlState('jump', false), 400)
         break
+
       case 4:
         bot.setControlState('sneak', true)
         setTimeout(() => bot.setControlState('sneak', false), 2000)
         break
+
       case 5:
         bot.look(Math.random() * Math.PI * 2, 0)
         break
+
       case 6:
         try {
           const block = bot.blockAt(bot.entity.position.offset(0, -1, 0))
           if (block && bot.canDigBlock(block)) await bot.dig(block)
         } catch {}
         break
+
       case 7:
         try {
           const item = bot.inventory.items()[0]
@@ -165,13 +178,14 @@ function startRandomMovement () {
           await bot.placeBlock(refBlock, { x: 0, y: 1, z: 0 })
         } catch {}
         break
+
       case 8:
         break
     }
   }, 4000)
 }
 
-/* ---------- USERNAME ROTATION TIMER ---------- */
+/* ---------- USERNAME ROTATION ---------- */
 
 setInterval(() => {
   console.log('[BOT] Rotating username...')
