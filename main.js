@@ -14,7 +14,7 @@ let headInterval = null
 
 /* ---------- USERNAME ROTATION ---------- */
 
-let nameIndex = 1                 // start from alex1
+let nameIndex = 2                 // start from alex1
 const MAX_INDEX = 100
 const ROTATION_INTERVAL = 5 * 60 * 1000 // ✅ EVERY 2 MINUTES
 
