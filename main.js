@@ -6,17 +6,18 @@ const app = express()
 const PORT = 3000
 
 let bot = null
-let isBusy = false
 let reconnecting = false
 let isRotating = false
+
 let movementInterval = null
 let headInterval = null
+let rotationInterval = null // 🔒 SINGLETON ROTATION TIMER
 
 /* ---------- USERNAME ROTATION ---------- */
 
-let nameIndex = 2                 // start from alex1
+let nameIndex = 1
 const MAX_INDEX = 100
-const ROTATION_INTERVAL = 5 * 60 * 1000 // ✅ EVERY 2 MINUTES
+const ROTATION_INTERVAL = 5 * 60 * 1000 // ✅ 5 MINUTES
 
 function getUsername () {
   return `alex${nameIndex}`
@@ -31,7 +32,7 @@ function incrementUsername () {
 
 function createBot () {
   const username = getUsername()
-  console.log(`[BOT] Initializing as ${username}...`)
+  console.log(`[BOT] Connecting as ${username}`)
 
   bot = mineflayer.createBot({
     host: 'play.darkryptus.us.to',
@@ -46,91 +47,86 @@ function createBot () {
 
   bot.on('spawn', () => {
     console.log('[BOT] Spawned')
-    startRandomMovement()
+    startMovement()
     startHeadMovement()
   })
 
   bot.on('end', () => {
     console.log('[BOT] Disconnected')
 
-    if (movementInterval) {
-      clearInterval(movementInterval)
-      movementInterval = null
-    }
+    stopMovement()
+    stopHeadMovement()
 
-    if (headInterval) {
-      clearInterval(headInterval)
-      headInterval = null
-    }
-
-    // ❌ do NOT reconnect here if this disconnect was for rotation
+    // ❌ DO NOT auto-reconnect if rotation caused this
     if (isRotating) return
 
     if (reconnecting) return
     reconnecting = true
-    bot = null
 
-    setImmediate(() => {
+    setTimeout(() => {
       reconnecting = false
       createBot()
-    })
+    }, 3000) // small safe delay (prevents throttle)
   })
 
-  bot.on('kicked', r => console.log('[BOT] Kicked:', r))
+  bot.on('kicked', r => console.log('[BOT] Kicked:', r?.toString()))
   bot.on('error', e => console.log('[BOT] Error:', e.message))
+}
+
+/* ---------- ROTATION (FIXED) ---------- */
+
+function startRotationTimer () {
+  if (rotationInterval) return // 🔒 PREVENT DUPLICATES
+
+  rotationInterval = setInterval(() => {
+    console.log('[BOT] Rotating username')
+
+    isRotating = true
+    if (bot) bot.quit()
+
+    incrementUsername()
+
+    setTimeout(() => {
+      isRotating = false
+      createBot()
+    }, 3000) // grace delay so server doesn’t rage
+  }, ROTATION_INTERVAL)
 }
 
 /* ---------- MOVEMENT ---------- */
 
-function randomInt (min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min
-}
-
-function doJump () {
-  bot.setControlState('jump', true)
-  setTimeout(() => bot.setControlState('jump', false), 300)
-
-  if (Math.random() < 0.3) {
-    setTimeout(() => {
-      bot.setControlState('jump', true)
-      setTimeout(() => bot.setControlState('jump', false), 250)
-    }, 400)
-  }
-}
-
-function startRandomMovement () {
-  if (movementInterval) clearInterval(movementInterval)
+function startMovement () {
+  stopMovement()
 
   movementInterval = setInterval(() => {
-    if (!bot || !bot.entity || isBusy) return
+    if (!bot || !bot.entity) return
 
     bot.clearControlStates()
 
-    if (Math.random() < 0.3) doJump()
+    // frequent jump
+    if (Math.random() < 0.3) {
+      bot.setControlState('jump', true)
+      setTimeout(() => bot.setControlState('jump', false), 300)
+    }
 
-    const action = randomInt(1, 4)
+    const r = Math.random()
 
-    switch (action) {
-      case 1:
-        bot.setControlState('forward', true)
-        setTimeout(() => bot.clearControlStates(), randomInt(800, 1400))
-        break
-
-      case 2:
-        bot.setControlState('forward', true)
-        bot.setControlState(Math.random() > 0.5 ? 'left' : 'right', true)
-        setTimeout(() => bot.clearControlStates(), randomInt(900, 1500))
-        break
-
-      case 3:
-        bot.setControlState('sneak', true)
-        setTimeout(() => bot.setControlState('sneak', false), randomInt(600, 1200))
-        break
-
-      case 4:
-        break
+    if (r < 0.4) {
+      bot.setControlState('forward', true)
+      setTimeout(() => bot.clearControlStates(), 1200)
+    } else if (r < 0.7) {
+      bot.setControlState('forward', true)
+      bot.setControlState(Math.random() > 0.5 ? 'left' : 'right', true)
+      setTimeout(() => bot.clearControlStates(), 1400)
     }
   }, 1500)
+}
+
+function stopMovement () {
+  if (movementInterval) {
+    clearInterval(movementInterval)
+    movementInterval = null
+  }
 }
 
 /* ---------- HEAD MOVEMENT ---------- */
@@ -139,7 +135,7 @@ let targetYaw = 0
 let targetPitch = 0
 
 function startHeadMovement () {
-  if (headInterval) clearInterval(headInterval)
+  stopHeadMovement()
 
   targetYaw = bot.entity.yaw
   targetPitch = bot.entity.pitch
@@ -155,15 +151,19 @@ function startHeadMovement () {
     const yaw = bot.entity.yaw
     const pitch = bot.entity.pitch
 
-    const yawDiff = normalizeAngle(targetYaw - yaw)
-    const pitchDiff = targetPitch - pitch
-
     bot.look(
-      yaw + yawDiff * 0.2,
-      pitch + pitchDiff * 0.2,
+      yaw + normalizeAngle(targetYaw - yaw) * 0.2,
+      pitch + (targetPitch - pitch) * 0.2,
       true
     )
   }, 250)
+}
+
+function stopHeadMovement () {
+  if (headInterval) {
+    clearInterval(headInterval)
+    headInterval = null
+  }
 }
 
 function normalizeAngle (a) {
@@ -172,35 +172,20 @@ function normalizeAngle (a) {
   return a
 }
 
-/* ---------- ROTATION TIMER ---------- */
-
-setInterval(() => {
-  console.log('[BOT] Rotating username...')
-
-  isRotating = true
-  if (bot) bot.quit()
-
-  incrementUsername()
-
-  setImmediate(() => {
-    isRotating = false
-    createBot()
-  })
-}, ROTATION_INTERVAL)
-
 /* ---------- EXPRESS ---------- */
 
 app.get('/', (req, res) => {
   res.json({
     status: bot ? 'ONLINE' : 'OFFLINE',
-    username: bot ? bot.username : null
+    username: bot?.username || null
   })
 })
 
 app.listen(PORT, () => {
-  console.log(`[WEB] Server running on http://localhost:${PORT}`)
+  console.log(`[WEB] http://localhost:${PORT}`)
 })
 
 /* ---------- START ---------- */
 
 createBot()
+startRotationTimer()
