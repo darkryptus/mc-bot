@@ -16,7 +16,7 @@ let headInterval = null
 
 let nameIndex = 1                 // start from alex1
 const MAX_INDEX = 100
-const ROTATION_INTERVAL = 2 * 60 * 1000 // ✅ EVERY 2 MINUTES
+const ROTATION_INTERVAL = 5 * 60 * 1000 // ✅ EVERY 2 MINUTES
 
 function getUsername () {
   return `alex${nameIndex}`
