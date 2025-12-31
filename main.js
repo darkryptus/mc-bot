@@ -8,14 +8,15 @@ const PORT = 3000
 let bot = null
 let isBusy = false
 let reconnecting = false
+let isRotating = false
 let movementInterval = null
 let headInterval = null
 
 /* ---------- USERNAME ROTATION ---------- */
 
-let nameIndex = 0
+let nameIndex = 1              // ✅ START FROM alex1
 const MAX_INDEX = 100
-const ROTATION_INTERVAL = 3 * 60 * 60 * 1000
+const ROTATION_INTERVAL = 2 * 60 * 60 * 1000 // 2 hours
 
 function getUsername () {
   return `alex${nameIndex}`
@@ -23,7 +24,7 @@ function getUsername () {
 
 function incrementUsername () {
   nameIndex++
-  if (nameIndex > MAX_INDEX) nameIndex = 0
+  if (nameIndex > MAX_INDEX) nameIndex = 1   // ✅ WRAP BACK TO alex1
 }
 
 /* ---------- BOT ---------- */
@@ -43,10 +44,6 @@ function createBot () {
 
   bot.loadPlugin(pathfinder)
 
-  bot.on('login', () => {
-    console.log(`[BOT] Logged in as ${username}`)
-  })
-
   bot.on('spawn', () => {
     console.log('[BOT] Spawned')
     startRandomMovement()
@@ -65,6 +62,9 @@ function createBot () {
       clearInterval(headInterval)
       headInterval = null
     }
+
+    // do NOT auto-reconnect during rotation
+    if (isRotating) return
 
     if (reconnecting) return
     reconnecting = true
@@ -106,40 +106,31 @@ function startRandomMovement () {
 
     bot.clearControlStates()
 
-    // frequent jumps
-    if (Math.random() < 0.3) {
-      doJump()
-    }
+    if (Math.random() < 0.3) doJump()
 
-    const action = randomInt(1, 5)
+    const action = randomInt(1, 4)
 
     switch (action) {
-      case 1: // walk forward
+      case 1:
         bot.setControlState('forward', true)
         setTimeout(() => bot.clearControlStates(), randomInt(800, 1400))
         break
-
-      case 2: // strafe + walk
+      case 2:
         bot.setControlState('forward', true)
         bot.setControlState(Math.random() > 0.5 ? 'left' : 'right', true)
         setTimeout(() => bot.clearControlStates(), randomInt(900, 1500))
         break
-
-      case 3: // short sneak
+      case 3:
         bot.setControlState('sneak', true)
         setTimeout(() => bot.setControlState('sneak', false), randomInt(600, 1200))
         break
-
-      case 4: // idle micro-pause
-        break
-
-      case 5: // rotate-only (movement handled by head loop)
+      case 4:
         break
     }
-  }, 1500) // 🔥 MUCH MORE FREQUENT
+  }, 1500)
 }
 
-/* ---------- HEAD ROTATION ---------- */
+/* ---------- HEAD MOVEMENT ---------- */
 
 let targetYaw = 0
 let targetPitch = 0
@@ -178,16 +169,18 @@ function normalizeAngle (a) {
   return a
 }
 
-/* ---------- USERNAME ROTATION ---------- */
+/* ---------- ROTATION TIMER ---------- */
 
 setInterval(() => {
-  reconnecting = true
+  console.log('[BOT] Rotating username...')
+
+  isRotating = true
   if (bot) bot.quit()
 
   incrementUsername()
 
   setImmediate(() => {
-    reconnecting = false
+    isRotating = false
     createBot()
   })
 }, ROTATION_INTERVAL)
