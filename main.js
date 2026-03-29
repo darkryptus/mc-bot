@@ -15,12 +15,12 @@ let rotationInterval = null // 🔒 SINGLETON ROTATION TIMER
 
 /* ---------- USERNAME ROTATION ---------- */
 
-let nameIndex = 1
+let nameIndex = 69
 const MAX_INDEX = 100
 const ROTATION_INTERVAL = 2 * 60 * 60 * 1000 // ✅ 5 MINUTES
 
 function getUsername () {
-  return `bkl${nameIndex}`
+  return `bsdk${nameIndex}`
 }
 
 function incrementUsername () {
