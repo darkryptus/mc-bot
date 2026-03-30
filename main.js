@@ -20,7 +20,7 @@ const MAX_INDEX = 100
 const ROTATION_INTERVAL = 2 * 60 * 60 * 1000 // ✅ 5 MINUTES
 
 function getUsername () {
-  return `tet${nameIndex}`
+  return `T4q9X2Lk7aP3${nameIndex}`
 }
 
 function incrementUsername () {
