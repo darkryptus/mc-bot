@@ -17,7 +17,7 @@ let rotationInterval = null // 🔒 SINGLETON ROTATION TIMER
 
 let nameIndex = 1
 const MAX_INDEX = 100
-const ROTATION_INTERVAL = 2 * 60 * 60 * 1000 // ✅ 5 MINUTES
+const ROTATION_INTERVAL = 0.5 * 60 * 60 * 1000 // ✅ 5 MINUTES
 
 function getUsername () {
   return `T4q9X2Lk7aP3${nameIndex}`
