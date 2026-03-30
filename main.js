@@ -15,7 +15,7 @@ let rotationInterval = null // 🔒 SINGLETON ROTATION TIMER
 
 /* ---------- USERNAME ROTATION ---------- */
 
-let nameIndex = 1
+let nameIndex = 2
 const MAX_INDEX = 100
 const ROTATION_INTERVAL = 0.5 * 60 * 60 * 1000 // ✅ 5 MINUTES
 
@@ -35,7 +35,7 @@ function createBot () {
   console.log(`[BOT] Connecting as ${username}`)
 
   bot = mineflayer.createBot({
-    host: 'darkryptus.aternos.me',
+    host: 'play.darkryptus.us.to',
     port: 12949,
     username,
     version: '1.8.9',
