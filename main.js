@@ -35,7 +35,7 @@ function createBot () {
   console.log(`[BOT] Connecting as ${username}`)
 
   bot = mineflayer.createBot({
-    host: 'play.darkryptus.us.to',
+    host: 'darterfish.aternos.host',
     port: 12949,
     username,
     version: '1.8.9',
